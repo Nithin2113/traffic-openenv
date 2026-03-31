@@ -1,0 +1,17 @@
+name: traffic-openenv
+description: 4-way traffic signal optimization environment
+version: 1.0.0
+
+environment:
+  entrypoint: app.env:TrafficEnv
+
+inference:
+  entrypoint: inference:main
+
+tasks:
+  - name: easy
+    description: Low traffic density
+  - name: medium
+    description: Medium traffic density
+  - name: hard
+    description: High congestion
