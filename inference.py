@@ -1,27 +1,36 @@
-import requests
+from app.env import TrafficEnv
+import time
 
-BASE_URL = "http://127.0.0.1:8000"
 
 def run_task():
+    env = TrafficEnv()
     total_reward = 0
 
-    # reset env
-    state = requests.post(f"{BASE_URL}/reset").json()
+    state = env.reset()
 
     for _ in range(10):
-        action = {"action": 1}  # simple agent
+        action = 1
 
-        response = requests.post(f"{BASE_URL}/step", json=action).json()
+        state, reward, done, _ = env.step(action)
 
-        total_reward += response["reward"]
+        total_reward += reward
 
-        if response["done"]:
+        if done:
             break
 
     return total_reward
 
 
+def main():
+    print("🚦 Traffic OpenEnv running...")
+
+    while True:
+        for level in ["easy", "medium", "hard"]:
+            score = run_task()
+            print(f"{level} score: {score}")
+
+        time.sleep(5)  # 🔥 IMPORTANT: prevents CPU overload
+
+
 if __name__ == "__main__":
-    for level in ["easy", "medium", "hard"]:
-        score = run_task()
-        print(level, "score:", score)
+    main()

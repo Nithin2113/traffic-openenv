@@ -6,6 +6,4 @@ COPY . .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 8000
-
-CMD ["python", "-m", "server.app"]
+CMD ["python", "inference.py"]
