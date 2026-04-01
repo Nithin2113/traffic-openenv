@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from app.env import TrafficEnv
+import uvicorn
 
 app = FastAPI()
-
 env = TrafficEnv()
 
 
@@ -34,3 +34,11 @@ def step(input: ActionInput):
 @app.get("/")
 def root():
     return {"status": "ok"}
+
+
+def main():
+    uvicorn.run(app, host="0.0.0.0", port=7860)
+
+
+if __name__ == "__main__":
+    main()
