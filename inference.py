@@ -10,7 +10,6 @@ client = OpenAI(
     api_key=os.getenv("HF_TOKEN", "dummy")
 )
 
-
 env = TrafficEnv()
 
 
@@ -31,13 +30,13 @@ def run_task(task_name):
     print(f"[START] task={task_name}", flush=True)
 
     for step in range(1, 11):
-        # Use deterministic rule-based agent (stable for evaluation)
+        # Use deterministic rule-based agent
         action = choose_action(state)
 
         # Step environment
         state, reward, done, _ = env.step(action)
 
-        # Safely extract numeric reward
+        # Extract numeric reward safely
         reward_value = getattr(reward, "value", reward)
 
         total_reward += reward_value
@@ -51,15 +50,15 @@ def run_task(task_name):
 
     # Normalize score to strict (0, 1)
     normalized_score = 1 / (1 + abs(total_reward))
-    normalized_score = round(normalized_score, 6) # Round for cleaner output
- 
-    # Optional metric (not required, but informative)
+    normalized_score = round(normalized_score, 6)
+
+    # Optional metric (informational)
     avg_reward = total_reward / steps if steps > 0 else 0
 
-   print(
-    f"[END] task={task_name} score={normalized_score} steps={steps} avg_reward={round(avg_reward,2)}",
-    flush=True
- )
+    print(
+        f"[END] task={task_name} score={normalized_score} steps={steps} avg_reward={round(avg_reward, 2)}",
+        flush=True
+    )
 
 
 def main():
