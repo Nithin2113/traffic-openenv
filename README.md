@@ -9,124 +9,212 @@ pinned: false
 
 # Traffic Optimization OpenEnv
 
-## Overview
-This project implements a reinforcement learning environment for optimizing traffic flow at a four-way intersection. It simulates vehicle queues and signal control, enabling agents to learn policies that reduce congestion and waiting time.
+Traffic Optimization OpenEnv is a seedable reinforcement-learning environment for adaptive control of a four-way intersection. It models queues on the north, south, east, and west approaches, exposes a binary signal-control action, and reports judge-friendly metrics such as throughput, average queue length, switching count, and reward improvement over a fixed-time baseline.
 
-The environment follows the OpenEnv specification and is designed for experimentation with adaptive traffic control strategies.
+## Submission Snapshot
 
----
+- Adaptive controller with deterministic threshold-based switching and anti-oscillation memory.
+- Strict hackathon logging in `inference.py` for `easy`, `medium`, and `hard`.
+- LLM call attempted on every step through `API_BASE_URL` and `API_KEY` with `HF_TOKEN` fallback.
+- Safe fallback agent when credentials are missing or model output is invalid.
+- Seeded scenarios and repeatable local benchmarks for debugging and demos.
 
-## Problem Statement
-Urban traffic congestion leads to increased travel time, fuel consumption, and environmental impact. Traditional traffic signals operate on fixed timing and fail to adapt to dynamic traffic conditions.
+## Benchmark Snapshot
 
-This project models a system where an agent can dynamically control signal switching to improve traffic efficiency.
+The local benchmark compares the adaptive controller against a fixed-time baseline on the same seed:
 
----
+| Task | Adaptive Reward | Fixed Baseline | Improvement |
+| --- | ---: | ---: | ---: |
+| `easy` | `70.8` | `52.4` | `+18.4` |
+| `medium` | `41.9` | `-137.7` | `+179.6` |
+| `hard` | `-801.45` | `-946.5` | `+145.05` |
 
-## Environment Design
+These benchmark rewards are for local comparison only. The official hackathon score emitted by `inference.py` follows the required formula `1 / (1 + abs(total_reward))`.
 
-### State
-- Vehicle count in each direction: north, south, east, west  
-- Current signal state: NS (north-south) or EW (east-west)  
+## Why This Version Is Stronger
+
+- Deterministic task seeds make evaluation reproducible.
+- Easy, medium, and hard scenarios now have distinct traffic demand profiles.
+- The adaptive controller compares against a fixed-time traffic light baseline.
+- The controller understands the current signal, so it does not switch away from a busy green phase.
+- Inference uses an LLM proxy when credentials are available, but falls back quickly to a reliable adaptive policy locally.
+- API responses include step diagnostics for debugging and demo storytelling.
+
+## Environment
+
+### Observation
+
+```json
+{
+  "north": 7,
+  "south": 6,
+  "east": 5,
+  "west": 8,
+  "signal": "NS",
+  "phase_age": 0
+}
+```
 
 ### Actions
-- `0`: Maintain current signal  
-- `1`: Switch signal  
 
-### Dynamics
-- Traffic flow updates based on the active signal  
-- Vehicle queues evolve dynamically at each step  
+- `0`: keep the current signal
+- `1`: switch to the other signal
 
----
+### Reward
+
+The reward balances multiple traffic goals:
+
+- Higher throughput is rewarded.
+- Queue growth is penalized.
+- Long single-lane queues are penalized.
+- Excessive switching is penalized.
+- Balanced service across both axes is encouraged.
 
 ## Tasks
 
-The environment provides three difficulty levels:
+| Task | Description | Max Steps |
+| --- | --- | --- |
+| `easy` | Light stochastic arrivals | 20 |
+| `medium` | Moderate asymmetric arrivals | 24 |
+| `hard` | Sustained congestion | 30 |
 
-- Easy: Low traffic density  
-- Medium: Moderate traffic conditions  
-- Hard: High congestion scenario  
+Each task is scored by comparing the adaptive policy against a fixed-time baseline on the same deterministic seed.
 
-Each task evaluates performance under different traffic loads.
+## Quick Start
 
----
+Install dependencies:
 
-## Reward Function
-The reward function is designed to encourage efficient traffic management:
-
-- Penalizes higher vehicle wait times  
-- Encourages reduction in queue length  
-- Promotes balanced signal switching  
-
-Objective: minimize congestion over time.
-
----
-
-## Evaluation Metrics
-
-Performance is evaluated using:
-
-- Total accumulated reward  
-- Average queue length  
-- Traffic throughput efficiency  
-
-Example output:
-
-```
-easy score: -300
-medium score: -450
-hard score: -500
+```bash
+pip install -r requirements.txt
 ```
 
+Run the judged inference script:
 
----
+```bash
+python inference.py
+```
 
-## Implementation Details
+The output format is exactly:
 
-- OpenEnv compliant environment  
-- Implements step(), reset(), and state handling  
-- Structured models for observations and rewards  
-- Dockerized for reproducibility  
-- Deployed on Hugging Face Spaces  
+```text
+[START] task=<task_name>
+[STEP] step=<n> reward=<value>
+[END] task=<task_name> score=<0-1 float> steps=<n>
+```
 
----
+Run the task benchmark:
+
+```bash
+python -m app.test_tasks
+```
+
+Run the tests:
+
+```bash
+python -m unittest
+```
+
+Start the API:
+
+```bash
+uvicorn server.app:app --host 0.0.0.0 --port 7860
+```
+
+## API
+
+### Health and Discovery
+
+```http
+GET /
+GET /health
+GET /tasks
+GET /tasks/{difficulty}
+```
+
+### Reset
+
+```http
+POST /reset
+```
+
+Optional body:
+
+```json
+{
+  "difficulty": "medium",
+  "seed": 23
+}
+```
+
+### Step
+
+```http
+POST /step
+```
+
+Body:
+
+```json
+{
+  "action": 0
+}
+```
+
+Example response:
+
+```json
+{
+  "observation": {
+    "north": 4,
+    "south": 3,
+    "east": 7,
+    "west": 9,
+    "signal": "NS",
+    "phase_age": 1
+  },
+  "reward": -6.7,
+  "done": false,
+  "info": {
+    "step": 1,
+    "scenario": "medium",
+    "throughput": 6,
+    "total_queue": 23,
+    "average_queue": 23.0,
+    "switches": 0
+  }
+}
+```
 
 ## Project Structure
 
-```
+```text
 app/
-  env.py
-  models.py
-  tasks.py
-inference.py
-openenv.yaml
-Dockerfile
-README.md
-requirements.txt
+  agent.py        Adaptive rule-based traffic controller
+  env.py          Seedable traffic simulation
+  models.py       Pydantic observation, action, reward, and info models
+  tasks.py        Fixed-time baseline and task scoring
+server/
+  app.py          FastAPI service
+tests/
+  test_environment.py
+inference.py      OpenEnv inference entrypoint
+openenv.yaml      OpenEnv metadata
+Dockerfile        Hugging Face Spaces container
 ```
 
+## OpenEnv Entry Points
 
----
+```yaml
+environment:
+  entrypoint: app.env:TrafficEnv
 
-## Key Differentiators
+inference:
+  entrypoint: inference:main
+```
 
-- Real-world system simulation instead of a toy problem  
-- Multi-level task evaluation (easy to hard scenarios)  
-- Fully containerized and reproducible environment  
-- Designed for integration with reinforcement learning agents  
-- Clean OpenEnv compliance with structured modeling  
+## Future Extensions
 
----
-
-## Future Work
-
-- Extend to multi-intersection traffic networks  
-- Integrate reinforcement learning agents for adaptive signal control  
-- Add real-time traffic visualization  
-- Introduce stochastic traffic patterns  
-
----
-
-## Conclusion
-
-This project demonstrates how reinforcement learning environments can be applied to real-world infrastructure problems such as traffic optimization. It provides a strong foundation for building intelligent and adaptive traffic systems.
+- Multi-intersection grid coordination.
+- Emergency vehicle priority.
+- Weather or event-driven arrival profiles.
+- Learned RL agents trained against the seedable scenarios.

@@ -1,33 +1,79 @@
-from app.env import TrafficEnv
+from typing import Callable, Dict, Tuple
+
+from app.agent import choose_action
+from app.env import SCENARIOS, TrafficEnv
+
+
+TASK_SEEDS = {
+    "easy": 11,
+    "medium": 23,
+    "hard": 47,
+}
+
+
+def fixed_time_action(state, step_index: int, cycle_length: int = 4) -> int:
+    """Baseline controller that alternates on a fixed timer."""
+
+    target_signal = "NS" if (step_index // cycle_length) % 2 == 0 else "EW"
+    return 0 if state.signal == target_signal else 1
+
+
+def adaptive_action(state, step_index: int) -> int:
+    return choose_action(state)
+
+
+def evaluate_policy(
+    difficulty: str,
+    policy: Callable,
+    seed: int = None,
+) -> Tuple[float, Dict]:
+    if difficulty not in SCENARIOS:
+        raise ValueError(f"Unknown difficulty '{difficulty}'. Expected one of {list(SCENARIOS)}.")
+
+    env = TrafficEnv(difficulty=difficulty, seed=seed)
+    state = env.reset(seed=seed)
+    total_reward = 0.0
+    info = env.metrics()
+
+    for step_index in range(env.scenario.max_steps):
+        action = policy(state, step_index)
+        state, reward, done, info = env.step(action)
+        total_reward += reward.value
+        if done:
+            break
+
+    return round(total_reward, 2), info
+
+
+def grade(score, baseline=None):
+    """Normalize a raw reward into a judge-friendly 0..1 score."""
+
+    if baseline is None:
+        normalized = (score + 750) / 900
+    else:
+        improvement = score - baseline
+        expected_gain = max(1.0, abs(baseline) * 0.25)
+        normalized = 0.5 + improvement / (2 * expected_gain)
+
+    return round(max(0.0, min(1.0, normalized)), 4)
+
 
 class TrafficTasks:
-    def __init__(self):
-        self.env = TrafficEnv()
-
     def run_task(self, difficulty="easy"):
-        state = self.env.reset()
+        return self.evaluate_task(difficulty)["score"]
 
-        # difficulty setup
-        if difficulty == "easy":
-            self.env.state_data.update({"north": 2, "south": 2, "east": 2, "west": 2})
+    def evaluate_task(self, difficulty="easy"):
+        seed = TASK_SEEDS.get(difficulty, 0)
+        adaptive_reward, adaptive_metrics = evaluate_policy(difficulty, adaptive_action, seed=seed)
+        baseline_reward, baseline_metrics = evaluate_policy(difficulty, fixed_time_action, seed=seed)
+        score = grade(adaptive_reward, baseline_reward)
 
-        elif difficulty == "medium":
-            self.env.state_data.update({"north": 5, "south": 5, "east": 5, "west": 5})
-
-        elif difficulty == "hard":
-            self.env.state_data.update({"north": 10, "south": 10, "east": 10, "west": 10})
-
-        total_reward = 0
-
-        for _ in range(10):
-            state, reward, done, _ = self.env.step(1)
-            total_reward += reward.value
-            if done:
-                break
-
-        return total_reward
-
-
-def grade(score):
-    normalized = (score + 600) / 600
-    return max(0, min(1, normalized))
+        return {
+            "difficulty": difficulty,
+            "score": score,
+            "adaptive_reward": adaptive_reward,
+            "baseline_reward": baseline_reward,
+            "reward_improvement": round(adaptive_reward - baseline_reward, 2),
+            "adaptive_metrics": adaptive_metrics,
+            "baseline_metrics": baseline_metrics,
+        }

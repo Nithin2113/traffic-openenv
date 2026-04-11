@@ -1,13 +1,14 @@
 [project]
 name = "traffic-openenv"
-version = "0.1.0"
-description = "Traffic signal optimization environment"
+version = "0.2.0"
+description = "Seedable traffic signal optimization OpenEnv with adaptive benchmarks"
 authors = [{ name = "Nithin" }]
 dependencies = [
     "fastapi",
     "uvicorn",
     "pydantic",
-    "openenv-core>=0.2.0"
+    "openenv-core>=0.2.0",
+    "openai"
 ]
 
 [project.scripts]
