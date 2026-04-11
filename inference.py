@@ -73,11 +73,35 @@ def score_from_reward(total_reward: float) -> float:
     """Hackathon-required score: strictly between 0 and 1."""
 
     score = 1 / (1 + abs(total_reward))
-    if score >= 1.0:
-        return 0.999999
-    if score <= 0.0:
-        return 0.000001
-    return round(score, 6)
+    return clamp_open_interval(score)
+
+
+def clamp_open_interval(value: float, epsilon: float = 1e-12) -> float:
+    """Clamp a numeric value into the open interval (0, 1)."""
+
+    if value <= 0.0:
+        return epsilon
+    if value >= 1.0:
+        return 1.0 - epsilon
+    return value
+
+
+def normalize_step_reward(raw_reward: float) -> float:
+    """Map raw environment reward into (0, 1) while preserving sign information.
+
+    Positive rewards stay above 0.5, negative rewards stay below 0.5, and the
+    output never reaches exactly 0 or 1.
+    """
+
+    scale = 25.0
+    normalized = 0.5 + 0.5 * (raw_reward / (abs(raw_reward) + scale))
+    return clamp_open_interval(normalized)
+
+
+def format_metric(value: float, decimals: int = 12) -> str:
+    """Return a richer numeric string without collapsing to 2 decimal places."""
+
+    return f"{value:.{decimals}f}"
 
 
 def run_task(task_name: str, client: Optional[OpenAI]) -> float:
@@ -96,17 +120,21 @@ def run_task(task_name: str, client: Optional[OpenAI]) -> float:
             action = choose_action(state)
 
         state, reward, done, _ = env.step(action)
-        reward_value = float(getattr(reward, "value", reward))
-        total_reward += reward_value
+        raw_reward_value = float(getattr(reward, "value", reward))
+        logged_reward_value = normalize_step_reward(raw_reward_value)
+        total_reward += raw_reward_value
         steps += 1
 
-        print(f"[STEP] step={step_number} reward={reward_value}", flush=True)
+        print(
+            f"[STEP] step={step_number} reward={format_metric(logged_reward_value)}",
+            flush=True,
+        )
 
         if done:
             break
 
     score = score_from_reward(total_reward)
-    print(f"[END] task={task_name} score={score} steps={steps}", flush=True)
+    print(f"[END] task={task_name} score={format_metric(score)} steps={steps}", flush=True)
     return score
 
 

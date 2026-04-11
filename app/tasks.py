@@ -55,7 +55,9 @@ def grade(score, baseline=None):
         expected_gain = max(1.0, abs(baseline) * 0.25)
         normalized = 0.5 + improvement / (2 * expected_gain)
 
-    return round(max(0.0, min(1.0, normalized)), 4)
+    epsilon = 1e-12
+    normalized = max(epsilon, min(1.0 - epsilon, normalized))
+    return normalized
 
 
 class TrafficTasks:

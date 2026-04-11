@@ -185,7 +185,7 @@ class TrafficEnv:
         self.prev_total_queue = total_queue
 
         done = self.step_count >= self.scenario.max_steps
-        return self._observation(), Reward(value=round(reward, 2)), done, info
+        return self._observation(), Reward(value=reward), done, info
 
     def state(self):
         if self.state_data is None:
